@@ -2,6 +2,7 @@
 const express = require("express");
 const LndGrpc = require("lnd-grpc");
 const dotenv = require("dotenv");
+const crypto = require("crypto");
 
 dotenv.config();
 
@@ -31,7 +32,7 @@ grpc
 router.post("/send-payment", async (req, res) => {
   try {
     // Destructure Lightning service from grpc
-    const { Router } = grpc.services;
+    const { Lightning } = grpc.services;
 
     // Destructure destination and message from the request body
     const { destination, message } = req.body;
@@ -40,33 +41,35 @@ router.post("/send-payment", async (req, res) => {
     const messageBytes = Buffer.from(message, "utf8");
 
     // Define payment amount (in sats)
-    const amount = 1000;
+    const amount = 1100;
 
-    // Create a random payment hash
-    const payment_hash = Buffer.from(
-      [...Array(32)].map(() => Math.floor(Math.random() * 256))
-    );
+    // Create preimage and payment_hash
+    const preimage = crypto.randomBytes(32);
+    const payment_hash = crypto.createHash("sha256").update(preimage).digest();
 
     // Construct payment request
     const paymentRequest = {
-      dest: Buffer.from(destination, "hex"), // Destination public key
+      dest: Buffer.from(destination, "hex"), // Destination public key (hex encoded string converted to Buffer)
       amt: amount, // Amount to send
-      payment_hash: payment_hash, // Payment hash
+      payment_hash: payment_hash, // Payment hash (buffer)
       final_cltv_delta: 40, // Final CLTV delta
       dest_custom_records: {
         34349334: messageBytes, // Message to send
+        5482373484: preimage,
       },
-      payment_request: "", // Empty payment request (not used in keysend)
       timeout_seconds: 60, // Timeout after 60 seconds
-      fee_limit_sat: 1000, // Fee limit
+      fee_limit: { fixed: 1000 }, // Fee limit
+      dest_features: [9], // Add this line
     };
 
     // Send payment and await response
-    const paymentResponse = await Router.sendPaymentV2(paymentRequest);
+    const paymentResponse = await Lightning.sendPaymentSync(paymentRequest);
 
-    // Return payment response
+    console.log("Payment response:", paymentResponse);
+
+    // Return only relevant information
     res.json({
-      payment_preimage: paymentResponse.payment_preimage,
+      payment_preimage: paymentResponse.payment_preimage.toString("hex"),
       payment_route: paymentResponse.payment_route,
     });
   } catch (error) {
