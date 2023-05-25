@@ -1,6 +1,8 @@
 // Import required modules
 const express = require("express");
 const dotenv = require("dotenv");
+const cors = require("cors");
+
 // Import the routes
 const sendRoute = require("./routes/send");
 const receiveRoute = require("./routes/receive");
@@ -13,6 +15,8 @@ const app = express();
 
 // Enable JSON body parsing for incoming requests
 app.use(express.json());
+
+app.use(cors());
 
 // Add routes
 app.use("/send", sendRoute);
