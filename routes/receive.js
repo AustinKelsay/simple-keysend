@@ -24,23 +24,32 @@ grpcReceiver
     const { Lightning } = grpcReceiver.services;
 
     // Subscribe to settled invoices
-    const txStream = Lightning.subscribeTransactions({ start_height: 0 });
+    const invoiceStream = Lightning.subscribeInvoices({});
 
     // Listen for new settled invoices
-    txStream.on("data", (invoice) => {
-      console.log("txxxxx", invoice);
-      // Check if it's a keysend payment
-      if (invoice.custom_records && invoice.custom_records["34349334"]) {
-        // Extract the message from the custom records
-        const messageBytes = invoice.custom_records["34349334"];
-        const message = Buffer.from(messageBytes, "utf8").toString();
+    invoiceStream.on("data", (invoice) => {
+      // Make sure that htlcs are defined
+      if (invoice.htlcs && invoice.htlcs.length > 0) {
+        const customRecords = invoice.htlcs[0].custom_records;
 
-        console.log("Received a keysend payment with message:", message);
+        // Find the key that matches the recordKey from the sender
+        for (const key in customRecords) {
+          const keyBuffer = Buffer.from(key, "binary");
+          const keyInt = keyBuffer.readUInt32LE();
+          if (keyInt === 34349334) {
+            // Extract the message from the custom records
+            const messageBytes = customRecords[key];
+            const message = Buffer.from(messageBytes).toString("utf8");
+
+            console.log("Received a keysend payment with message:", message);
+            break;
+          }
+        }
       }
     });
 
-    txStream.on("error", (error) => console.error("Error:", error));
-    txStream.on("end", () => console.log("Invoice stream ended"));
+    invoiceStream.on("error", (error) => console.error("Error:", error));
+    invoiceStream.on("end", () => console.log("Invoice stream ended"));
   })
   .catch((error) => {
     console.error("Could not connect to the receiving LND node:", error);

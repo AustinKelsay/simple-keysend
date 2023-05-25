@@ -65,8 +65,6 @@ router.post("/send-payment", async (req, res) => {
     // Send payment and await response
     const paymentResponse = await Lightning.sendPaymentSync(paymentRequest);
 
-    console.log("Payment response:", paymentResponse);
-
     // Return only relevant information
     res.json({
       payment_preimage: paymentResponse.payment_preimage.toString("hex"),
