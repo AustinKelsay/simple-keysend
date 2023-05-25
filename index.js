@@ -4,8 +4,7 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 
 // Import the routes
-const sendRoute = require("./routes/send");
-const receiveRoute = require("./routes/receive");
+const keysendRoute = require("./routes/keysend");
 
 // Load environment variables from .env file into process.env
 dotenv.config();
@@ -18,9 +17,8 @@ app.use(express.json());
 
 app.use(cors());
 
-// Add routes
-app.use("/send", sendRoute);
-app.use("/receive", receiveRoute);
+// Add route
+app.use("/", keysendRoute);
 
 // Define server port, either from environment variable or default to 3000
 const port = process.env.PORT || 3000;
