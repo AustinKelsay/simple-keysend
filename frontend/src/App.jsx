@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
@@ -7,7 +7,44 @@ function App() {
   const [host, setHost] = useState("");
   const [cert, setCert] = useState("");
   const [macaroon, setMacaroon] = useState("");
-  const [isConnected, setIsConnected] = useState(false); // New state variable
+  const [isConnected, setIsConnected] = useState(false);
+  const [wsMessage, setWsMessage] = useState(null); // Store WebSocket messages
+  const [wsConnection, setWsConnection] = useState(null); // WebSocket connection
+
+  useEffect(() => {
+    // If isConnected is true, create a WebSocket connection
+    if (isConnected) {
+      const ws = new WebSocket("ws://localhost:3001");
+
+      ws.onopen = () => {
+        console.log("WebSocket client connected");
+      };
+
+      ws.onmessage = (message) => {
+        console.log("Received:", message.data);
+        const { host: senderHost, message: senderMessage } = JSON.parse(
+          message.data
+        );
+
+        // If the sender's host matches the local host, it's a sent message
+        if (senderHost === host) {
+          console.log("Sent:", senderMessage);
+        } else {
+          // Else, it's a received message
+          setWsMessage({ senderHost, senderMessage });
+        }
+      };
+
+      setWsConnection(ws);
+
+      // Clean up WebSocket connection on component unmount
+      return () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      };
+    }
+  }, [isConnected]);
 
   const startListening = async (event) => {
     event.preventDefault();
@@ -42,7 +79,7 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ destination, message }),
+        body: JSON.stringify({ host, destination, message }),
       });
 
       const data = await response.json();
@@ -97,6 +134,16 @@ function App() {
           </form>
         </>
       )}
+      {/* Display WebSocket messages */}
+      {wsMessage && (
+        <div className="ws-message">
+          <h2>Received Keysend Message:</h2>
+          <p>
+            From {wsMessage.senderHost}: {wsMessage.senderMessage}
+          </p>
+        </div>
+      )}
+
       <div className="gif"></div>
     </div>
   );
