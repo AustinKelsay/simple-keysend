@@ -20,7 +20,19 @@ module.exports = (wss) => {
     grpcReceiver
       .connect()
       .then(async () => {
+        // Check the connection state
+        if (grpcReceiver.state !== "active") {
+          return res.status(500).json({
+            message: "Connection not stable. Please try again later",
+          });
+        }
+
         const { Lightning } = grpcReceiver.services;
+
+        // Get info about the node
+        const info = await Lightning.getInfo({});
+        const alias = info.alias; // The user's alias
+
         const invoiceStream = Lightning.subscribeInvoices({});
 
         // Listen for new settled invoices
@@ -50,8 +62,11 @@ module.exports = (wss) => {
         invoiceStream.on("error", (error) => console.error("Error:", error));
         invoiceStream.on("end", () => console.log("Invoice stream ended"));
 
-        // Send a success response
-        res.json({ message: "Successfully started listening for keysends." });
+        // Send a success response with the user's alias
+        res.json({
+          message: "Successfully started listening for keysends.",
+          alias,
+        });
       })
       .catch((error) => {
         console.error("Could not connect to the receiving LND node:", error);
@@ -63,10 +78,8 @@ module.exports = (wss) => {
 
   router.post("/send-payment", async (req, res) => {
     try {
-      // Start of try block
       const { host, destination, message } = req.body;
 
-      // Retrieve the user's grpc instance
       const grpc = grpcInstances[host];
       if (!grpc) {
         return res.status(400).json({
@@ -75,6 +88,11 @@ module.exports = (wss) => {
       }
 
       const { Lightning } = grpc.services;
+
+      // Get sender's node info to extract public key
+      const senderInfo = await Lightning.getInfo({});
+
+      const senderPubKey = senderInfo.identity_pubkey;
 
       // Convert message into buffer
       const messageBytes = Buffer.from(message, "utf8");
@@ -108,7 +126,14 @@ module.exports = (wss) => {
       const paymentResponse = await Lightning.sendPaymentSync(paymentRequest);
 
       // Broadcast sent message
-      wss.broadcast(JSON.stringify({ host, message }));
+      wss.broadcast(
+        JSON.stringify({
+          senderHost: host,
+          senderPubKey: senderPubKey,
+          receiverPubKey: destination,
+          message,
+        })
+      );
 
       // Return only relevant information
       res.json({
