@@ -31,28 +31,32 @@ module.exports = (wss) => {
 
         // Get info about the node
         const info = await Lightning.getInfo({});
-        const alias = info.alias; // The user's alias
+
+        const alias = info.alias;
 
         const invoiceStream = Lightning.subscribeInvoices({});
 
         // Listen for new settled invoices
         invoiceStream.on("data", (invoice) => {
-          // Make sure that htlcs are defined
           if (invoice.htlcs && invoice.htlcs.length > 0) {
             const customRecords = invoice.htlcs[0].custom_records;
 
-            // Find the key that matches the recordKey from the sender
             for (const key in customRecords) {
               const keyBuffer = Buffer.from(key, "binary");
               const keyInt = keyBuffer.readUInt32LE();
               if (keyInt === 34349334) {
-                // Extract the message from the custom records
                 const messageBytes = customRecords[key];
                 const message = Buffer.from(messageBytes).toString("utf8");
 
-                // Send the message to all connected WebSocket clients
-                // Attach the host along with the message
-                wss.broadcast(JSON.stringify({ host, message }));
+                wss.broadcast(
+                  JSON.stringify({
+                    senderHost: host,
+                    alias: alias,
+                    senderPubKey: info.identity_pubkey,
+                    senderMessage: message,
+                    timestamp: new Date().toISOString(),
+                  })
+                );
                 break;
               }
             }
@@ -66,6 +70,7 @@ module.exports = (wss) => {
         res.json({
           message: "Successfully started listening for keysends.",
           alias,
+          pubKey: info.identity_pubkey,
         });
       })
       .catch((error) => {
@@ -93,6 +98,8 @@ module.exports = (wss) => {
       const senderInfo = await Lightning.getInfo({});
 
       const senderPubKey = senderInfo.identity_pubkey;
+
+      const senderAlias = senderInfo.alias;
 
       // Convert message into buffer
       const messageBytes = Buffer.from(message, "utf8");
@@ -131,7 +138,9 @@ module.exports = (wss) => {
           senderHost: host,
           senderPubKey: senderPubKey,
           receiverPubKey: destination,
+          alias: senderAlias,
           message,
+          timestamp: new Date().toISOString(), // add timestamp here
         })
       );
 

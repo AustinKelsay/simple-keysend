@@ -20,18 +20,77 @@ body {
   font-size: calc(10px + 2vmin);
 }
 
-input {
+.form-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2em;
+}
+
+.form-container input,
+.form-container button {
   font-family: "Orbitron", sans-serif;
-  padding: 10px;
-  margin: 10px;
-  font-size: 1.2em;
+  margin: 0.5em;
+}
+
+input {
+  padding: 0.5em;
+  font-size: 1em;
 }
 
 button {
-  font-family: "Orbitron", sans-serif;
   background-color: #50c878;
-  padding: 10px 20px;
-  margin: 10px;
-  font-size: 1.2em;
+  padding: 0.5em 1em;
+  font-size: 1em;
   cursor: pointer;
+}
+
+.message-container {
+  width: 80%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 1em;
+  margin: 1% auto;
+  border-radius: 8px;
+  width: 80%;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.alias {
+  font-weight: bold;
+}
+
+.timestamp {
+  margin-top: 1%;
+  font-size: 0.6em;
+}
+
+.message-body {
+  margin-top: 1em;
+}
+
+.message-footer {
+  margin-top: 1em;
+  font-size: 0.8em;
+}
+
+.connected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }

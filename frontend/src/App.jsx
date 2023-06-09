@@ -1,6 +1,83 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 
+function NodeSetup({
+  onSubmit,
+  host,
+  setHost,
+  cert,
+  setCert,
+  macaroon,
+  setMacaroon,
+}) {
+  return (
+    <form className="form-container" onSubmit={onSubmit}>
+      <input
+        type="text"
+        placeholder="Host"
+        value={host}
+        onChange={(e) => setHost(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Cert"
+        value={cert}
+        onChange={(e) => setCert(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Macaroon"
+        value={macaroon}
+        onChange={(e) => setMacaroon(e.target.value)}
+      />
+      <button type="submit">Start Listening</button>
+    </form>
+  );
+}
+
+function PaymentForm({
+  onSubmit,
+  destination,
+  setDestination,
+  message,
+  setMessage,
+}) {
+  return (
+    <form className="form-container" onSubmit={onSubmit}>
+      <input
+        type="text"
+        placeholder="Destination"
+        value={destination}
+        onChange={(e) => setDestination(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="Message"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+      />
+      <button type="submit">Send</button>
+    </form>
+  );
+}
+
+function MessageDisplay({ messages }) {
+  return (
+    <div className="message-container">
+      {messages.map((message, index) => (
+        <div key={index} className="message">
+          <div className="message-header">
+            <span className="alias">{message.alias}</span>
+            <div className="message-footer">Host: {message.senderHost}</div>
+          </div>
+          <div className="message-body">{message.senderMessage}</div>
+          <span className="timestamp">{message.timestamp}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const [destination, setDestination] = useState("");
   const [message, setMessage] = useState("");
@@ -9,7 +86,7 @@ function App() {
   const [macaroon, setMacaroon] = useState("");
   const [myPubKey, setMyPubKey] = useState("");
   const [isConnected, setIsConnected] = useState(false);
-  const [wsMessage, setWsMessage] = useState(null); // Store WebSocket messages
+  const [wsMessages, setWsMessages] = useState([]);
   const [wsConnection, setWsConnection] = useState(null); // WebSocket connection
   const [alias, setAlias] = useState(""); // Store the user's alias
 
@@ -29,14 +106,19 @@ function App() {
           senderPubKey,
           receiverPubKey,
           message: senderMessage,
+          timestamp, // Extract the timestamp
+          alias, // Extract the sender's alias
         } = JSON.parse(message.data);
 
         // If the sender's pubkey matches the local pubkey, it's a sent message
         if (senderPubKey === myPubKey) {
-          console.log("Sent:", senderMessage);
+          console.log("Sent:", senderMessage, "at", timestamp);
         } else if (receiverPubKey === myPubKey) {
-          // Else, if the receiver's pubkey matches the local pubkey, it's a received message
-          setWsMessage({ senderHost, senderMessage });
+          // If it's a received message, add it to the array of messages
+          setWsMessages((prevMessages) => [
+            ...prevMessages,
+            { senderHost, senderMessage, timestamp, senderPubKey, alias },
+          ]);
         } else {
           // Else, ignore the message
           console.log("Ignored message from", senderHost);
@@ -73,7 +155,7 @@ function App() {
       if (response.ok) {
         setIsConnected(true);
         setAlias(data.alias);
-        setMyPubKey(data.pubKey);
+        setMyPubKey(data.pubKey); // Set the user's public key
       }
     } catch (error) {
       console.error("Error:", error);
@@ -101,62 +183,31 @@ function App() {
 
   return (
     <div className="App">
+      <h1>Node Setup</h1>
       {!isConnected ? (
-        <>
-          <h1>Node Setup</h1>
-          <form onSubmit={startListening}>
-            <input
-              type="text"
-              placeholder="Host"
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Cert"
-              value={cert}
-              onChange={(e) => setCert(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Macaroon"
-              value={macaroon}
-              onChange={(e) => setMacaroon(e.target.value)}
-            />
-            <button type="submit">Start Listening</button>
-          </form>
-        </>
+        <NodeSetup
+          onSubmit={startListening}
+          host={host}
+          setHost={setHost}
+          cert={cert}
+          setCert={setCert}
+          macaroon={macaroon}
+          setMacaroon={setMacaroon}
+        />
       ) : (
-        <>
-          <h1>Connected as {alias}</h1>
-          <h1>Send Payment</h1>
-          <form onSubmit={sendPayment}>
-            <input
-              type="text"
-              placeholder="Destination"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Message"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-            />
-            <button type="submit">Send</button>
-          </form>
-        </>
-      )}
-      {/* Display WebSocket messages */}
-      {wsMessage && (
-        <div className="ws-message">
-          <h2>Received Keysend Message:</h2>
-          <p>
-            From {wsMessage.senderHost}: {wsMessage.senderMessage}
-          </p>
+        <div>
+          <h2>Connected as {alias}</h2>
+          <h2>Send Payment</h2>
+          <PaymentForm
+            onSubmit={sendPayment}
+            destination={destination}
+            setDestination={setDestination}
+            message={message}
+            setMessage={setMessage}
+          />
         </div>
       )}
-
+      <MessageDisplay messages={wsMessages} />
       <div className="gif"></div>
     </div>
   );
