@@ -183,17 +183,19 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Node Setup</h1>
       {!isConnected ? (
-        <NodeSetup
-          onSubmit={startListening}
-          host={host}
-          setHost={setHost}
-          cert={cert}
-          setCert={setCert}
-          macaroon={macaroon}
-          setMacaroon={setMacaroon}
-        />
+        <div>
+          <h1>Node Setup</h1>
+          <NodeSetup
+            onSubmit={startListening}
+            host={host}
+            setHost={setHost}
+            cert={cert}
+            setCert={setCert}
+            macaroon={macaroon}
+            setMacaroon={setMacaroon}
+          />
+        </div>
       ) : (
         <div>
           <h2>Connected as {alias}</h2>

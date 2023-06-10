@@ -8,79 +8,45 @@ const router = express.Router();
 const grpcInstances = {};
 
 module.exports = (wss) => {
-  router.post("/setup-listen", (req, res) => {
-    const { host, cert, macaroon } = req.body;
+  // Setup-listen route: for setting up gRPC connection and start listening for keysends.
+  router.post("/setup-listen", async (req, res) => {
+    try {
+      const { host, cert, macaroon } = req.body;
 
-    // Create a new instance of the LndGrpc class for the user's node
-    const grpcReceiver = new LndGrpc({ host, cert, macaroon });
+      // Create a new instance of the LndGrpc class for the user's node
+      const grpcReceiver = new LndGrpc({ host, cert, macaroon });
 
-    // Store the instance using the user's id as a key
-    grpcInstances[host] = grpcReceiver;
+      // Store the instance using the user's host as a key
+      grpcInstances[host] = grpcReceiver;
 
-    grpcReceiver
-      .connect()
-      .then(async () => {
-        // Check the connection state
-        if (grpcReceiver.state !== "active") {
-          return res.status(500).json({
-            message: "Connection not stable. Please try again later",
-          });
-        }
+      // Connect to the gRPC server
+      await grpcReceiver.connect();
 
-        const { Lightning } = grpcReceiver.services;
-
-        // Get info about the node
-        const info = await Lightning.getInfo({});
-
-        const alias = info.alias;
-
-        const invoiceStream = Lightning.subscribeInvoices({});
-
-        // Listen for new settled invoices
-        invoiceStream.on("data", (invoice) => {
-          if (invoice.htlcs && invoice.htlcs.length > 0) {
-            const customRecords = invoice.htlcs[0].custom_records;
-
-            for (const key in customRecords) {
-              const keyBuffer = Buffer.from(key, "binary");
-              const keyInt = keyBuffer.readUInt32LE();
-              if (keyInt === 34349334) {
-                const messageBytes = customRecords[key];
-                const message = Buffer.from(messageBytes).toString("utf8");
-
-                wss.broadcast(
-                  JSON.stringify({
-                    senderHost: host,
-                    alias: alias,
-                    senderPubKey: info.identity_pubkey,
-                    senderMessage: message,
-                    timestamp: new Date().toISOString(),
-                  })
-                );
-                break;
-              }
-            }
-          }
+      // Check the connection state
+      if (grpcReceiver.state !== "active") {
+        return res.status(500).json({
+          message: "Connection not stable. Please try again later",
         });
+      }
 
-        invoiceStream.on("error", (error) => console.error("Error:", error));
-        invoiceStream.on("end", () => console.log("Invoice stream ended"));
+      const { Lightning } = grpcReceiver.services;
 
-        // Send a success response with the user's alias
-        res.json({
-          message: "Successfully started listening for keysends.",
-          alias,
-          pubKey: info.identity_pubkey,
-        });
-      })
-      .catch((error) => {
-        console.error("Could not connect to the receiving LND node:", error);
-        res
-          .status(500)
-          .json({ message: "Error connecting to LND node", error });
+      // Get info about the node
+      const info = await Lightning.getInfo({});
+
+      // Send a success response with the user's alias
+      res.json({
+        message: "Successfully started listening for keysends.",
+        alias: info.alias,
+        pubKey: info.identity_pubkey,
       });
+    } catch (error) {
+      console.error("Could not connect to the receiving LND node:", error);
+      res.status(500).json({ message: "Error connecting to LND node", error });
+    }
   });
 
+  // Send-payment route: for sending payment from one node to another
   router.post("/send-payment", async (req, res) => {
     try {
       const { host, destination, message } = req.body;
@@ -96,13 +62,6 @@ module.exports = (wss) => {
 
       // Get sender's node info to extract public key
       const senderInfo = await Lightning.getInfo({});
-
-      const senderPubKey = senderInfo.identity_pubkey;
-
-      const senderAlias = senderInfo.alias;
-
-      // Convert message into buffer
-      const messageBytes = Buffer.from(message, "utf8");
 
       // Define payment amount (in sats)
       const amount = 1100;
@@ -121,7 +80,7 @@ module.exports = (wss) => {
         payment_hash: payment_hash, // Payment hash (buffer)
         final_cltv_delta: 40, // Final CLTV delta
         dest_custom_records: {
-          34349334: messageBytes, // Message to send
+          34349334: Buffer.from(message, "utf8"), // Message to send
           5482373484: preimage,
         },
         timeout_seconds: 60, // Timeout after 60 seconds
@@ -136,9 +95,9 @@ module.exports = (wss) => {
       wss.broadcast(
         JSON.stringify({
           senderHost: host,
-          senderPubKey: senderPubKey,
+          senderPubKey: senderInfo.identity_pubkey,
           receiverPubKey: destination,
-          alias: senderAlias,
+          alias: senderInfo.alias,
           message,
           timestamp: new Date().toISOString(), // add timestamp here
         })

@@ -13,6 +13,7 @@ const app = express();
 // Enable JSON body parsing for incoming requests
 app.use(express.json());
 
+// Enable Cross-Origin Resource Sharing
 app.use(cors());
 
 // Define server port, either from environment variable or default to 3000
@@ -21,6 +22,7 @@ const port = process.env.PORT || 3000;
 // Initialize a WebSocket Server on a different port (e.g. 3001)
 const wss = new WebSocket.Server({ port: 3001 });
 
+// Broadcast function to send data to all connected clients
 wss.broadcast = function broadcast(data) {
   wss.clients.forEach(function each(client) {
     if (client.readyState === WebSocket.OPEN) {
