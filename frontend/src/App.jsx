@@ -67,8 +67,8 @@ function MessageDisplay({ messages }) {
       {messages.map((message, index) => (
         <div key={index} className="message">
           <div className="message-header">
-            <span className="alias">{message.alias}</span>
-            <div className="message-footer">Host: {message.senderHost}</div>
+            <p className="alias">{message.alias}</p>
+            <p className="message-footer">Host: {message.senderHost}</p>
           </div>
           <div className="message-body">{message.senderMessage}</div>
           <span className="timestamp">{message.timestamp}</span>
@@ -78,6 +78,7 @@ function MessageDisplay({ messages }) {
   );
 }
 
+// App component is the main component of our application
 function App() {
   const [destination, setDestination] = useState("");
   const [message, setMessage] = useState("");
@@ -87,98 +88,115 @@ function App() {
   const [myPubKey, setMyPubKey] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [wsMessages, setWsMessages] = useState([]);
-  const [wsConnection, setWsConnection] = useState(null); // WebSocket connection
-  const [alias, setAlias] = useState(""); // Store the user's alias
+  const [wsConnection, setWsConnection] = useState(null);
+  const [alias, setAlias] = useState("");
 
+  // Here, we are setting up a WebSocket connection when the isConnected state changes
   useEffect(() => {
-    // If isConnected is true, create a WebSocket connection
     if (isConnected) {
-      const ws = new WebSocket("ws://localhost:3001");
-
-      ws.onopen = () => {
-        console.log("WebSocket client connected");
-      };
-
-      ws.onmessage = (message) => {
-        console.log("Received:", message.data);
-        const {
-          senderHost,
-          senderPubKey,
-          receiverPubKey,
-          message: senderMessage,
-          timestamp, // Extract the timestamp
-          alias, // Extract the sender's alias
-        } = JSON.parse(message.data);
-
-        // If the sender's pubkey matches the local pubkey, it's a sent message
-        if (senderPubKey === myPubKey) {
-          console.log("Sent:", senderMessage, "at", timestamp);
-        } else if (receiverPubKey === myPubKey) {
-          // If it's a received message, add it to the array of messages
-          setWsMessages((prevMessages) => [
-            ...prevMessages,
-            { senderHost, senderMessage, timestamp, senderPubKey, alias },
-          ]);
-        } else {
-          // Else, ignore the message
-          console.log("Ignored message from", senderHost);
-        }
-      };
-
-      setWsConnection(ws);
-
-      // Clean up WebSocket connection on component unmount
-      return () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-      };
+      setupWebSocket();
     }
+
+    // This function runs when the component is unmounted or before rerunning the effect due to dependency changes
+    // Here, it closes the WebSocket connection when the component unmounts
+    return () => {
+      if (wsConnection?.readyState === WebSocket.OPEN) {
+        wsConnection.close();
+      }
+    };
   }, [isConnected]);
 
+  // This function sets up the WebSocket connection and handles incoming messages
+  const setupWebSocket = () => {
+    const ws = new WebSocket("ws://localhost:3001");
+
+    ws.onopen = () => {
+      console.log("WebSocket client connected");
+    };
+
+    ws.onmessage = (message) => {
+      handleWebSocketMessage(message);
+    };
+
+    setWsConnection(ws);
+  };
+
+  // This function handles the incoming WebSocket messages
+  const handleWebSocketMessage = (message) => {
+    console.log("Received:", message.data);
+    const {
+      senderHost,
+      senderPubKey,
+      receiverPubKey,
+      message: senderMessage,
+      timestamp,
+      alias,
+    } = JSON.parse(message.data);
+
+    if (senderPubKey === myPubKey) {
+      console.log("Sent:", senderMessage, "at", timestamp);
+    } else if (receiverPubKey === myPubKey) {
+      setWsMessages((prevMessages) => [
+        ...prevMessages,
+        { senderHost, senderMessage, timestamp, senderPubKey, alias },
+      ]);
+    } else {
+      console.log("Ignored message from", senderHost);
+    }
+  };
+
+  // Function to start listening to the network
   const startListening = async (event) => {
     event.preventDefault();
 
-    try {
-      const response = await fetch("http://localhost:3000/setup-listen", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ host, cert, macaroon }),
-      });
+    const response = await postSetupListenData();
 
+    if (response.ok) {
       const data = await response.json();
       console.log(data);
 
-      // Assuming the server responds with a 200 status code when the connection is successful
-      if (response.ok) {
-        setIsConnected(true);
-        setAlias(data.alias);
-        setMyPubKey(data.pubKey); // Set the user's public key
-      }
+      setIsConnected(true);
+      setAlias(data.alias);
+      setMyPubKey(data.pubKey);
+    } else {
+      console.error("Error:", error);
+    }
+  };
+
+  // Function to post data and return the response
+  const postSetupListenData = () => {
+    return fetch("http://localhost:3000/setup-listen", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ host, cert, macaroon }),
+    });
+  };
+
+  // Function to send payments
+  const sendPayment = async (event) => {
+    event.preventDefault();
+
+    try {
+      const response = await postPaymentData();
+
+      const data = await response.json();
+      console.log(data);
     } catch (error) {
       console.error("Error:", error);
     }
   };
 
-  const sendPayment = async (event) => {
-    event.preventDefault();
-
-    try {
-      const response = await fetch("http://localhost:3000/send-payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ host, destination, message }),
-      });
-
-      const data = await response.json();
-      console.log(data);
-    } catch (error) {
-      console.error("Error:", error);
-    }
+  // Function to post data and return the response
+  const postPaymentData = () => {
+    return fetch("http://localhost:3000/send-payment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ host, destination, message }),
+    });
   };
 
   return (
